@@ -1,26 +1,54 @@
 - hosts: app
   become: yes
+  gather_facts: yes
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+
   tasks:
-    - name: Install Java
+    - name: Install Java (Debian-based systems)
+      apt:
+        name: openjdk-11-jdk
+        state: present
+      when: ansible_facts.pkg_mgr == "apt"
+
+    - name: Install Java (Red Hat-based systems)
       yum:
         name: java-21-amazon-corretto
         state: present
+      when: ansible_facts.pkg_mgr == "yum"
 
-    - name: Install MySQL
+    - name: Install MySQL (Debian-based systems)
+      apt:
+        name: mysql-server
+        state: present
+      when: ansible_facts.pkg_mgr == "apt"
+
+    - name: Install MySQL (Red Hat-based systems)
       yum:
         name: mariadb-server
         state: present
+      when: ansible_facts.pkg_mgr == "yum"
 
-    - name: Start MySQL
+    - name: Start MySQL (Debian-based systems)
+      service:
+        name: mysql
+        state: started
+        enabled: true
+      when: ansible_facts.pkg_mgr == "apt"
+
+    - name: Start MySQL (Red Hat-based systems)
       service:
         name: mariadb
         state: started
         enabled: true
+      when: ansible_facts.pkg_mgr == "yum"
 
-    - name: Secure MySQL and create app DB
+    - name: Create app DB
       mysql_db:
         name: world
         state: present
+        login_user: root
+        login_password: Thanigai@01  # Replace with actual root password
 
     - name: Create app user
       mysql_user:
@@ -29,16 +57,21 @@
         priv: "world.*:ALL"
         host: "%"
         state: present
+        login_user: root
+        login_password: Thanigai@01  # Replace with actual root password
 
-    - name: Install Nginx
-      amazon.aws.amazon_linux_extras:
-        name: nginx1
-        state: enabled
-
-    - name: Install Nginx package
-      yum:
+    # ✅ FIXED: Install Nginx based on package manager
+    - name: Install Nginx (Debian-based systems)
+      apt:
         name: nginx
         state: present
+      when: ansible_facts.pkg_mgr == "apt"
+
+    - name: Install Nginx (Red Hat-based systems)
+      shell: |
+        amazon-linux-extras enable nginx1
+        yum install -y nginx
+      when: ansible_facts.pkg_mgr == "yum"
 
     - name: Start Nginx
       service:
@@ -46,16 +79,17 @@
         state: started
         enabled: true
 
+    # ✅ Copy Spring Boot JAR to the correct directory for Ubuntu/Debian
     - name: Copy Spring Boot JAR
       copy:
         src: ./privilege-0.0.1-SNAPSHOT.jar
-        dest: /home/ec2-user/privilege.jar
+        dest: /home/ubuntu/privilege.jar
         mode: '0755'
 
     - name: Run Spring Boot app
-      shell: "nohup java -jar /home/ec2-user/privilege.jar > /home/ec2-user/app.log 2>&1 &"
+      shell: "nohup java -jar /home/ubuntu/privilege.jar > /home/ubuntu/app.log 2>&1 &"
       args:
-        chdir: /home/ec2-user/
+        chdir: /home/ubuntu/
 
     - name: Configure Nginx reverse proxy
       copy:
