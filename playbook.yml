@@ -1,0 +1,78 @@
+- hosts: app
+  become: yes
+  tasks:
+    - name: Install Java
+      yum:
+        name: java-21-amazon-corretto
+        state: present
+
+    - name: Install MySQL
+      yum:
+        name: mariadb-server
+        state: present
+
+    - name: Start MySQL
+      service:
+        name: mariadb
+        state: started
+        enabled: true
+
+    - name: Secure MySQL and create app DB
+      mysql_db:
+        name: world
+        state: present
+
+    - name: Create app user
+      mysql_user:
+        name: admin_user
+        password: Thani@01
+        priv: "world.*:ALL"
+        host: "%"
+        state: present
+
+    - name: Install Nginx
+      amazon.aws.amazon_linux_extras:
+        name: nginx1
+        state: enabled
+
+    - name: Install Nginx package
+      yum:
+        name: nginx
+        state: present
+
+    - name: Start Nginx
+      service:
+        name: nginx
+        state: started
+        enabled: true
+
+    - name: Copy Spring Boot JAR
+      copy:
+        src: ./privilege-0.0.1-SNAPSHOT.jar
+        dest: /home/ec2-user/privilege.jar
+        mode: '0755'
+
+    - name: Run Spring Boot app
+      shell: "nohup java -jar /home/ec2-user/privilege.jar > /home/ec2-user/app.log 2>&1 &"
+      args:
+        chdir: /home/ec2-user/
+
+    - name: Configure Nginx reverse proxy
+      copy:
+        dest: /etc/nginx/conf.d/springboot.conf
+        content: |
+          server {
+              listen 80;
+              location / {
+                  proxy_pass http://localhost:8095;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+          }
+
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted
