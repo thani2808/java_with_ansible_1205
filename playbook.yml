@@ -1,3 +1,32 @@
+# -------------------------------
+# 1. Set MySQL root password locally (Debian only)
+# -------------------------------
+- name: Set MySQL root password (Debian only)
+  hosts: localhost
+  become: yes
+  vars:
+    mysql_root_password: Thanigai@01
+
+  tasks:
+    - name: Ensure MySQL is installed
+      apt:
+        name: mysql-server
+        state: present
+        update_cache: yes
+
+    - name: Set MySQL root password (Debian only)
+      mysql_user:
+        name: root
+        host: localhost
+        password: "{{ mysql_root_password }}"
+        state: present
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+      become: yes
+
+# -------------------------------
+# 2. Provision app server
+# -------------------------------
 - hosts: app
   become: yes
   gather_facts: yes
@@ -11,7 +40,7 @@
     spring_boot_dest: "/home/{{ ansible_user }}/privilege.jar"
 
   tasks:
-    - name: Install pip and PyMySQL (required for MySQL modules)
+    - name: Install pip and MySQL Python packages (Debian)
       apt:
         name:
           - python3-pip
@@ -19,7 +48,7 @@
         state: present
       when: ansible_facts.pkg_mgr == "apt"
 
-    - name: Install pip and PyMySQL (Amazon Linux)
+    - name: Install pip (Amazon Linux)
       yum:
         name: python3-pip
         state: present
@@ -30,7 +59,7 @@
         name: PyMySQL
         executable: pip3
 
-    - name: Install Java
+    - name: Install Java (Debian)
       apt:
         name: openjdk-11-jdk
         state: present
@@ -42,7 +71,7 @@
         state: present
       when: ansible_facts.pkg_mgr == "yum"
 
-    - name: Install MySQL/MariaDB
+    - name: Install MySQL/MariaDB (Debian)
       apt:
         name: mysql-server
         state: present
@@ -54,7 +83,7 @@
         state: present
       when: ansible_facts.pkg_mgr == "yum"
 
-    - name: Start MySQL/MariaDB
+    - name: Start MySQL/MariaDB service
       service:
         name: "{{ 'mysql' if ansible_facts.pkg_mgr == 'apt' else 'mariadb' }}"
         state: started
@@ -101,7 +130,7 @@
       shell: amazon-linux-extras enable nginx1
       when: ansible_facts.pkg_mgr == "yum"
 
-    - name: Install Nginx
+    - name: Install Nginx (Debian)
       apt:
         name: nginx
         state: present
@@ -149,3 +178,4 @@
       service:
         name: nginx
         state: restarted
+
